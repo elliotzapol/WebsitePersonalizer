@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Joske's Picks Website Generator with Circular PNG Base64</title>
+<title>Property Picks Website Generator</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -52,7 +52,7 @@
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBGxMWMZqAdme8MEVOBxl-GzJjCujz9STU&libraries=places"></script>
 </head>
 <body>
-  <h1>Joske's Picks Website Generator</h1>
+  <h1>Property Picks Website Generator</h1>
   <form id="siteForm">
     <h2>Property Info</h2>
     <label>Property Name:</label>
@@ -261,10 +261,11 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "joske-map.html";
+      a.download = "property-map.html";
       a.click();
       URL.revokeObjectURL(url);
     });
   </script>
 </body>
 </html>
+
