@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>2040 Broadway - Joske's Picks</title>
+  <meta charset="UTF-8" />
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; width: 100%;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      background: #f0f0f0;
+    }
+    @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+    #banner {
+      background-color: #5c0e07;
+      padding: 10px 16px;
+      display: flex; align-items: center;
+      height: 80px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      flex-shrink: 0;
+    }
+    #banner a { display: inline-block; }
+    #logo { height: 50px; cursor: pointer; }
+    #sidebar-header {
+      text-align: center;
+      background-color: #ffffff;
+      border: 2px solid #54160d;
+      border-radius: 5px;
+      padding: 2px;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+      color: #54160d;
+      font-weight: 250;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    #close-details {
+        background: #54160d;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 18px;
+        padding: 6px 10px;
+        border-radius: 4px;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+
+    #close-details:hover {
+        background: #7a2015;
+    }
+
+    #container {
+      display: flex;
+      height: calc(100vh - 80px);
+      overflow: hidden;
+      gap: 12px;
+      padding: 0 12px 12px 12px;
+      box-sizing: border-box;
+    }
+    #map {
+      flex: 3;
+      height: 100%;
+      min-height: 400px;
+      border-radius: 12px 0 0 12px;
+      box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.1);
+    }
+    #sidebar {
+      flex: 1;
+      background-color: #f9f9f9;
+      color: #333;
+      padding: 20px;
+      box-shadow: -3px 0 8px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: fadeIn 1s ease-in;
+      position: relative;
+    }
+    #list-container, #details-container {
+      flex: 1;
+      overflow-y: auto;
+    }
+    #restaurant-list {
+      list-style: none;
+      padding-left: 0;
+      margin-bottom: 20px;
+      scroll-behavior: smooth;
+    }
+    #restaurant-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 15px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background-color 0.3s ease;
+      user-select: none;
+    }
+    .restaurant-thumb {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      object-fit: cover;
+      border: 2px solid #ccc;
+    }
+    #restaurant-list li:hover { background-color: #e0f7fa; }
+    #restaurant-list li.selected {
+      background-color: #00bcd4;
+      color: white;
+      font-weight: 600;
+    }
+    #restaurant-details {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding-bottom: 20px;
+    }
+    #place-image {
+      max-width: 100%;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      margin-bottom: 15px;
+    }
+    #sidebar h2 {
+      margin-top: 0; margin-bottom: 10px;
+      font-weight: 700; font-size: 1.5rem;
+      color: #54160d;
+    }
+    #sidebar a {
+      color: #54160d;
+      font-weight: 600;
+      text-decoration: none;
+      margin-top: auto;
+      display: inline-block;
+      padding: 8px 15px;
+      border: 2px solid #54160d;
+      border-radius: 6px;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    #sidebar a:hover { background-color: #54160d; color: white; }
+
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #54160d;
+      color: white;
+      border: none;
+      font-weight: 700;
+      font-size: 20px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      line-height: 30px;
+      text-align: center;
+      padding: 0;
+      user-select: none;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      transition: background-color 0.3s ease;
+    }
+    .close-btn:hover {
+      background: #7a2015;
+    }
+
+    .gm-style-iw .gm-ui-hover-effect {
+      display: none !important;
+    }
+  </style>
+
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBGxMWMZqAdme8MEVOBxl-GzJjCujz9STU&libraries=places&callback=initMap" async defer></script>
+
+  <script>
+    const propertyLatLng = { lat: __PROPERTY_LAT__, lng: __PROPERTY_LNG__ };
+    const locationConfigs = __RESTAURANTS_JSON__;
+
+    let map, placesService;
+    const markers = [];
+    let lastClickedMarker = null;
+
+    function createCircularMarkerIcon(base64Image, size = 40) {
+      if (!base64Image || base64Image.trim() === "") {
+        return {
+          url: "https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi2_hdpi.png",
+          scaledSize: new google.maps.Size(size, size)
+        };
+      }
+
+      const encodedSvg = encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+          <defs>
+            <clipPath id="circleClip">
+              <circle cx="${size/2}" cy="${size/2}" r="${size/2}" />
+            </clipPath>
+          </defs>
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2}" fill="white" stroke="black" stroke-width="2"/>
+          <image href="data:image/png;base64,${base64Image.trim()}" x="0" y="0" height="${size}" width="${size}" clip-path="url(%23circleClip)" />
+        </svg>
+      `);
+
+      return {
+        url: `data:image/svg+xml;charset=UTF-8,${encodedSvg}`,
+        scaledSize: new google.maps.Size(size, size)
+      };
+    }
+
+    function updateSidebar(place, location, marker, index) {
+      const detailsEl = document.getElementById("restaurant-details");
+      let html = `<h2>${place.name}</h2>`;
+
+      if (place.photos?.length > 0) {
+        const photoUrl = place.photos[0].getUrl({ maxWidth: 400, maxHeight: 300 });
+        html += `<img id="place-image" src="${photoUrl}" alt="${place.name}">`;
+      }
+
+      if (place.formatted_address) html += `<p><strong>Address:</strong> ${place.formatted_address}</p>`;
+      if (place.formatted_phone_number) html += `<p><strong>Phone:</strong> ${place.formatted_phone_number}</p>`;
+      if (place.rating) html += `<p><strong>Rating:</strong> ${place.rating} / 5</p>`;
+      if (place.website) html += `<p><a href="${place.website}" target="_blank" rel="noopener noreferrer">Visit Website</a></p>`;
+      if (place.reviews?.length > 0) {
+        html += `<h3>Reviews:</h3><ul>`;
+        place.reviews.slice(0, 3).forEach(review => {
+          html += `<li><strong>${review.author_name}:</strong> ${review.text}</li>`;
+        });
+        html += `</ul>`;
+      }
+
+      detailsEl.innerHTML = html;
+      showDetails();
+
+      if (lastClickedMarker && lastClickedMarker !== marker) {
+        const prevIndex = markers.indexOf(lastClickedMarker);
+        lastClickedMarker.setIcon(createCircularMarkerIcon(locationConfigs[prevIndex].base64Image, 40));
+      }
+      marker.setIcon(createCircularMarkerIcon(location.base64Image, 48));
+      lastClickedMarker = marker;
+
+      const listEl = document.getElementById("restaurant-list");
+      [...listEl.children].forEach((li, liIndex) => {
+        li.classList.toggle("selected", liIndex === index);
+      });
+    }
+
+    function showDetails() {
+      document.getElementById("list-container").style.display = "none";
+      document.getElementById("details-container").style.display = "block";
+      document.getElementById("sidebar-header").style.display = "none";
+    }
+
+    function showList() {
+      document.getElementById("sidebar-header").style.display = "block";
+      document.getElementById("details-container").style.display = "none";
+      document.getElementById("list-container").style.display = "block";
+      if (lastClickedMarker) {
+        const prevIndex = markers.indexOf(lastClickedMarker);
+        lastClickedMarker.setIcon(createCircularMarkerIcon(locationConfigs[prevIndex].base64Image, 40));
+        lastClickedMarker = null;
+      }
+      document.querySelectorAll("#restaurant-list li").forEach(li => li.classList.remove("selected"));
+    }
+
+    window.initMap = function () {
+      const center = { lat: propertyLatLng.lat, lng: propertyLatLng.lng };
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 16,
+        center,
+        styles: [
+          { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+          { featureType: "all", elementType: "all", stylers: [{ saturation: -75 }] }
+        ]
+      });
+
+      placesService = new google.maps.places.PlacesService(map);
+
+      const homeIcon = {
+        url: "https://upload.wikimedia.org/wikipedia/commons/e/e6/Home_icon_black.png",
+        scaledSize: new google.maps.Size(32, 32),
+      };
+
+      const homeMarker = new google.maps.Marker({
+        position: center,
+        map,
+        title: "__PROPERTY_NAME__",
+        icon: homeIcon
+      });
+
+      const infoWindow = new google.maps.InfoWindow({
+        content: `<div style="font-weight:bold; color:#54160d;">__PROPERTY_NAME__</div>`
+      });
+      infoWindow.open(map, homeMarker);
+
+      const listEl = document.getElementById("restaurant-list");
+      markers.length = 0;
+
+      locationConfigs.forEach((location, index) => {
+        const marker = new google.maps.Marker({
+          position: location.position,
+          map,
+          title: location.title,
+          icon: createCircularMarkerIcon(location.base64Image, 40),
+        });
+        markers.push(marker);
+
+        marker.addListener("click", () => {
+          placesService.getDetails({ placeId: location.placeId }, (place, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+              updateSidebar(place, location, marker, index);
+            } else {
+              document.getElementById("restaurant-details").innerHTML = `<h2>${location.title}</h2><p>Details not available.</p>`;
+              showDetails();
+            }
+          });
+        });
+
+        marker.addListener("mouseover", () => {
+          if (lastClickedMarker !== marker) marker.setIcon(createCircularMarkerIcon(location.base64Image, 48));
+        });
+
+        marker.addListener("mouseout", () => {
+          if (lastClickedMarker !== marker) marker.setIcon(createCircularMarkerIcon(location.base64Image, 40));
+        });
+
+        const li = document.createElement("li");
+        const img = document.createElement("img");
+        img.src = location.base64Image
+          ? `data:image/png;base64,${location.base64Image.trim()}`
+          : "https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi2_hdpi.png";
+        img.className = "restaurant-thumb";
+
+        const span = document.createElement("span");
+        span.textContent = location.title;
+
+        li.appendChild(img);
+        li.appendChild(span);
+
+        li.addEventListener("mouseenter", () => {
+          if (lastClickedMarker !== marker) marker.setIcon(createCircularMarkerIcon(location.base64Image, 48));
+        });
+        li.addEventListener("mouseleave", () => {
+          if (lastClickedMarker !== marker) marker.setIcon(createCircularMarkerIcon(location.base64Image, 40));
+        });
+        li.addEventListener("click", () => {
+          google.maps.event.trigger(marker, "click");
+        });
+
+        listEl.appendChild(li);
+      });
+
+      map.addListener("click", () => {
+        if (!lastClickedMarker) return;
+        showList();
+      });
+    };
+  </script>
+</head>
+<body>
+  <header id="banner">
+    <a href="https://joske.org/" target="_blank" rel="noopener noreferrer">
+      <img src="https://media-production.lp-cdn.com/cdn-cgi/image/format=auto,quality=85/https://media-production.lp-cdn.com/media/osnhyasc3cibgvwop68s" alt="Logo" id="logo" />
+    </a>
+  </header>
+  <div id="container">
+    <div id="map"></div>
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <h1>Joske's Picks</h1>
+      </div>
+      <div id="list-container">
+        <ul id="restaurant-list"></ul>
+      </div>
+      <div id="details-container" style="display:none; position: relative;">
+        <button id="close-details">x</button>
+        <div id="restaurant-details">
+          <p>Click a marker or a restaurant above to view details here.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const closeDetailsBtn = document.getElementById("close-details");
+      closeDetailsBtn.addEventListener("click", () => {
+        showList();
+      });
+    });
+  </script>
+</body>
+</html>
