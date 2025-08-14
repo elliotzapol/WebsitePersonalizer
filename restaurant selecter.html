@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Restaurant Finder</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f0f0;
+    overflow: hidden;
+  }
+  @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+  #banner {
+    background-color: #5c0e07;
+    padding: 10px 16px;
+    display: flex; align-items: center;
+    height: 80px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    flex-shrink: 0;
+  }
+  #banner a { display: inline-block; }
+  #logo { height: 50px; cursor: pointer; }
+
+  #container {
+    display: flex;
+    height: calc(100vh - 80px);
+    overflow: hidden;
+    gap: 12px;
+    padding: 0 12px 12px 12px;
+    box-sizing: border-box;
+  }
+  #map {
+    flex: 3;
+    height: 100%;
+    min-height: 400px;
+    border-radius: 12px 0 0 12px;
+    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.1);
+  }
+  #sidebar {
+    flex: 1;
+    background-color: #f9f9f9;
+    color: #333;
+    padding: 20px;
+    box-shadow: -3px 0 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeIn 1s ease-in;
+    position: relative;
+  }
+
+  #controls {
+    margin-bottom: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: #54160d;
+  }
+  #address { flex: 1 1 100%; padding: 6px 10px; font-size: 1rem; border: 2px solid #54160d; border-radius: 6px; outline-offset: 2px; }
+  #radius { flex: 1 1 30%; }
+  #rval, #miles { font-weight: 700; margin-left: 5px; color: #7a2015; }
+  button { background-color: #54160d; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: background-color 0.3s ease; }
+  button:hover { background-color: #7a2015; }
+
+  #list-container, #details-container { flex: 1; overflow-y: auto; }
+  #restaurant-list { list-style: none; padding-left: 0; margin: 0; scroll-behavior: smooth; }
+  #restaurant-list li { display: flex; align-items: center; gap: 10px; padding: 10px 15px; cursor: pointer; border-radius: 6px; transition: background-color 0.3s ease; user-select: none; }
+  #restaurant-list li:hover { background-color: #e0f7fa; }
+  #restaurant-list li.selected { background-color: #00bcd4; color: white; font-weight: 600; }
+  .restaurant-thumb { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; object-fit: cover; border: 2px solid #ccc; }
+  #restaurant-details { padding-bottom: 20px; }
+  #place-image { max-width: 100%; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 15px; }
+  #sidebar h2 { margin-top: 0; margin-bottom: 10px; font-weight: 700; font-size: 1.5rem; color: #54160d; }
+  .radius-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .radius-row input[type="range"] { flex: 1; }
+  #close-details { background: #54160d; color: white; border: none; cursor: pointer; font-weight: 700; font-size: 18px; padding: 6px 10px; border-radius: 4px; position: absolute; top: 10px; right: 10px; }
+  #close-details:hover { background: #7a2015; }
+</style>
+</head>
+<body>
+<header id="banner">
+  <a href="https://joske.org/" target="_blank" rel="noopener noreferrer">
+    <img src="https://media-production.lp-cdn.com/cdn-cgi/image/format=auto,quality=85/https://media-production.lp-cdn.com/media/osnhyasc3cibgvwop68s" alt="Logo" id="logo" />
+  </a>
+</header>
+<div id="container">
+  <div id="map"></div>
+  <div id="sidebar">
+    <div id="controls">
+      <input id="address" type="text" placeholder="Enter address" />
+      <div class="radius-row">
+        Radius: <span id="miles">0.50</span> mi
+        <input id="radius" type="range" min="100" max="5000" value="800" />
+      </div>
+      <button id="searchBtn">Search</button>
+      <button type="button" onclick="window.location.href='index.html'" id="button">Website Personalizer</button>
+    </div>
+    <div id="list-container">
+      <ul id="restaurant-list">
+        <li style="color:#777; padding:15px;">Enter address and click Search</li>
+      </ul>
+    </div>
+    <div id="details-container" style="display:none;">
+      <button style="margin-top: 21%;" id="close-details">x</button>
+      <div id="restaurant-details"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let map, geocoder, placesService;
+let markers = [], lastClickedMarker = null, searchCircle = null;
+
+function createCircularMarkerIcon(url, size = 40) {
+    // Temporary: use default Google Maps marker
+    return {
+        url: "https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi2_hdpi.png",
+        scaledSize: new google.maps.Size(size, size)
+    };
+}
+
+
+function clearMarkers() { markers.forEach(m => m.setMap(null)); markers = []; }
+
+function showList() {
+  document.getElementById("list-container").style.display = "block";
+  document.getElementById("details-container").style.display = "none";
+  if (lastClickedMarker) lastClickedMarker.setIcon(createCircularMarkerIcon(lastClickedMarker.customIconUrl, 40));
+  lastClickedMarker = null;
+  document.querySelectorAll("#restaurant-list li").forEach(li => li.classList.remove("selected"));
+}
+
+function showDetails() { document.getElementById("list-container").style.display = "none"; document.getElementById("details-container").style.display = "block"; }
+
+function updateSidebar(place, marker, index) {
+  const detailsEl = document.getElementById("restaurant-details");
+  let html = `<h2>${place.name}</h2>`;
+  if (place.photos?.length > 0) html += `<img id="place-image" src="${place.photos[0].getUrl({ maxWidth:400,maxHeight:300 })}" alt="${place.name}">`;
+  if (place.formatted_address) html += `<p><strong>Address:</strong> ${place.formatted_address}</p>`;
+  if (place.formatted_phone_number) html += `<p><strong>Phone:</strong> ${place.formatted_phone_number}</p>`;
+  if (place.rating) html += `<p><strong>Rating:</strong> ${place.rating} / 5</p>`;
+  if (place.website) html += `<p><a href="${place.website}" target="_blank" rel="noopener noreferrer">Visit Website</a></p>`;
+  if (place.reviews?.length > 0) {
+    html += `<h3>Reviews:</h3><ul>`;
+    place.reviews.slice(0,3).forEach(r=>{html+=`<li><strong>${r.author_name}:</strong> ${r.text}</li>`;});
+    html += `</ul>`;
+  }
+  detailsEl.innerHTML = html;
+  showDetails();
+
+  if (lastClickedMarker && lastClickedMarker !== marker) lastClickedMarker.setIcon(createCircularMarkerIcon(lastClickedMarker.customIconUrl, 40));
+  marker.setIcon(createCircularMarkerIcon(marker.customIconUrl, 48));
+  lastClickedMarker = marker;
+
+  const listEl = document.getElementById("restaurant-list");
+  [...listEl.children].forEach((li, liIndex)=>li.classList.toggle("selected", liIndex===index));
+}
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat:37.7691, lng:-122.434120 }, zoom: 12,
+    styles: [
+      { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+      { featureType: "all", elementType: "all", stylers: [{ saturation: -75 }] }
+    ]
+  });
+  geocoder = new google.maps.Geocoder();
+  placesService = new google.maps.places.PlacesService(map);
+}
+
+function searchNearbyRestaurants(address, radius) {
+  geocoder.geocode({ address }, (results,status)=>{
+    if (status!=="OK"||!results[0]) { alert("Geocode failed: "+status); return; }
+    const location = results[0].geometry.location;
+    map.setCenter(location); map.setZoom(15);
+    clearMarkers();
+    if (searchCircle) searchCircle.setMap(null);
+
+    searchCircle = new google.maps.Circle({
+      strokeColor:"#54160d", strokeOpacity:0.6, strokeWeight:2,
+      fillColor:"#54160d", fillOpacity:0.15,
+      map, center:location, radius
+    });
+
+    const request = { location, radius, type:"restaurant" };
+    placesService.nearbySearch(request, (places,status)=>{
+      if (status!==google.maps.places.PlacesServiceStatus.OK || !places.length) { alert("No restaurants found nearby."); return; }
+      const listEl = document.getElementById("restaurant-list");
+      listEl.innerHTML = "";
+
+      places.forEach((place,index)=>{
+        const photoUrl = place.photos?.[0]?.getUrl({ maxWidth:100,maxHeight:100 }) || "https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi2_hdpi.png";
+        const normalIcon = createCircularMarkerIcon(photoUrl,40);
+        const hoverIcon = createCircularMarkerIcon(photoUrl,48);
+
+        const marker = new google.maps.Marker({
+          map, position: place.geometry.location, title: place.name,
+          icon: normalIcon, customIconUrl: photoUrl
+        });
+        markers.push(marker);
+
+        marker.addListener("mouseover", ()=>{ if(lastClickedMarker!==marker) marker.setIcon(hoverIcon); });
+        marker.addListener("mouseout", ()=>{ if(lastClickedMarker!==marker) marker.setIcon(normalIcon); });
+
+        const li = document.createElement("li");
+        const img = document.createElement("img"); img.src = photoUrl; img.className="restaurant-thumb"; li.appendChild(img);
+        const span = document.createElement("span"); span.textContent=place.name; li.appendChild(span);
+
+        li.addEventListener("click", ()=>{
+          placesService.getDetails({ placeId: place.place_id }, (detail, detailStatus)=>{
+            if(detailStatus===google.maps.places.PlacesServiceStatus.OK) updateSidebar(detail,marker,index);
+            else alert("Could not fetch details for this place.");
+          });
+        });
+        li.addEventListener("mouseenter", ()=>{ if(lastClickedMarker!==marker) marker.setIcon(hoverIcon); });
+        li.addEventListener("mouseleave", ()=>{ if(lastClickedMarker!==marker) marker.setIcon(normalIcon); });
+
+        listEl.appendChild(li);
+
+        marker.addListener("click", ()=>{
+          placesService.getDetails({ placeId: place.place_id }, (detail,detailStatus)=>{
+            if(detailStatus===google.maps.places.PlacesServiceStatus.OK) updateSidebar(detail,marker,index);
+            else alert("Could not fetch details for this place.");
+          });
+        });
+      });
+    });
+  });
+}
+
+window.initMap = initMap;
+
+const radiusInput = document.getElementById("radius");
+radiusInput.addEventListener("input", e=>{ document.getElementById("miles").textContent=(+e.target.value/1609.34).toFixed(2); });
+document.getElementById("searchBtn").addEventListener("click", ()=>{ const address=document.getElementById("address").value.trim(); const radius=+radiusInput.value; if(!address){alert("Please enter an address.");return;} searchNearbyRestaurants(address,radius); });
+document.getElementById("close-details").addEventListener("click", showList);
+</script>
+
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBGxMWMZqAdme8MEVOBxl-GzJjCujz9STU&libraries=places&callback=initMap"></script>
+</body>
+</html>
